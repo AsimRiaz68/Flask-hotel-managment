@@ -1,19 +1,29 @@
 from distutils.log import debug
+from sqlalchemy import create_engine
 from flask import Flask, render_template, request, redirect, url_for, session
-from flask_mysqldb import MySQL
-import MySQLdb.cursors
+from flask_sqlalchemy import SQLAlchemy
+from models import db
+
 import re
 
 app = Flask(__name__)
 
 app.secret_key = "\xf5]\x12'\x91\x9e\xe6H\xb4\xa2)\x82O\xcdP\xc6\x85>\xbcBU\xc18R"
-
+app.config['SQLALCHEMY_DATABASE_URI'] = {user:'root', host:'127.0.0.1', port:3306, schema:'main-schema'}
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['MYSQL_HOST'] = 'localhost'
 app.config['MYSQL_USER'] = 'root'
 app.config['MYSQL_PASSWORD'] = 'Allah@111'
 app.config['MYSQL_DB'] = 'pythonlogin'
 
-# Intialize MySQL
+# Intialize 
+db = SQLAlchemy()
+class User(db.Model):
+    id = db.Column(db.Integer, primary_key=True) # primary keys are required by SQLAlchemy
+    email = db.Column(db.String(100), unique=True)
+    password = db.Column(db.String(100))
+    name = db.Column(db.String(1000))
+
 mysql = MySQL(app)
 @app.route('/', methods=['GET', 'POST'])
 @app.route('/pythonlogin/Homeroom')
@@ -47,6 +57,7 @@ def login():
             msg = 'Incorrect username/password!'
     # Show the login form with message (if any)
     return render_template('index.html', msg=msg)
+
 @app.route('/pythonlogin/logout')
 def logout():
    session.pop('loggedin', None)
@@ -54,28 +65,32 @@ def logout():
    session.pop('username', None)
    # Redirect to login page
    return redirect(url_for('login'))
-@app.route('/pythonlogin/register', methods=['GET', 'POST'])
-# http://localhost:5000/pythinlogin/register - this will be the registration page, we need to use both GET and POST requests
+
 @app.route('/pythonlogin/register', methods=['GET', 'POST'])
 def register():
-    # Output message if something goes wrong...
     msg = ''
-    # Check if "username", "password" and "email" POST requests exist (user submitted form)
-    if request.method == 'POST' and 'username' in request.form and 'password' in request.form and 'email' in request.form:
-        # Create variables for easy access
+    if request.method == 'POST' and 'username' in request.form and 'password' in request.form and 'email' in request.form :
         username = request.form['username']
         password = request.form['password']
         email = request.form['email']
+        cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
+        cursor.execute('SELECT * FROM accounts WHERE username = % s', (username, ))
+        account = cursor.fetchone()
+        if account:
+            msg = 'Account already exists !'
+        elif not re.match(r'[^@]+@[^@]+\.[^@]+', email):
+            msg = 'Invalid email address !'
+        elif not re.match(r'[A-Za-z0-9]+', username):
+            msg = 'Username must contain only characters and numbers !'
+        elif not username or not password or not email:
+            msg = 'Please fill out the form !'
+        else:
+            cursor.execute('INSERT INTO accounts VALUES (NULL, % s, % s, % s)', (username, password, email, ))
+            mysql.connection.commit()
+            msg = 'You have successfully registered !'
     elif request.method == 'POST':
-        # Form is empty... (no POST data)
-        msg = 'Please fill out the form!'
-    # Show registration form with message (if any)
-    return render_template('register.html', msg=msg)
-   
- 
-
-   
-
+        msg = 'Please fill out the form !'
+    return render_template('register.html', msg = msg)
 
 
 @app.route('/pythonlogin/home')
